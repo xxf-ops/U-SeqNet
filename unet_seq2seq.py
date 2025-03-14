@@ -81,30 +81,42 @@ class Unet_seq2seq(nn.Module):
         self.layer3 = self.base_layers[5]
         self.layer4 = self.base_layers[6]
         self.layer5 = self.base_layers[7]
+        #其中e开头表示编码层中的LSTM，d开头表示解码层中的LSTM
         self.eclstm1 = ConvLSTMCell(64, 64, 3)
         self.dclstm1 = ConvLSTMCell(64, 64, 3)
+        
         self.eclstm2 = ConvLSTMCell(64, 64, 3)
         self.dclstm2 = ConvLSTMCell(64, 64, 3)
+        
         self.eclstm3 = ConvLSTMCell(128, 128, 3)
         self.dclstm3 = ConvLSTMCell(128, 128, 3)
+        
         self.eclstm4 = ConvLSTMCell(256, 256, 3)
         self.dclstm4 = ConvLSTMCell(256, 256, 3)
+        
         self.eclstm5 = ConvLSTMCell(512, 512, 3)
         self.dclstm5 = ConvLSTMCell(512, 512, 3)
+        
         self.eclstm1.init_hidden(1, 64, (128, 128))
         self.dclstm1.init_hidden(1, 64, (128, 128))
+        
         self.eclstm2.init_hidden(1, 64, (64, 64))
         self.dclstm2.init_hidden(1, 64, (64, 64))
+        
         self.eclstm3.init_hidden(1, 128, (32, 32))
         self.dclstm3.init_hidden(1, 128, (32, 32))
+        
         self.eclstm4.init_hidden(1, 256, (16, 16))
         self.dclstm4.init_hidden(1, 256, (16, 16))
+        
         self.eclstm5.init_hidden(1, 512, (8, 8))
         self.dclstm5.init_hidden(1, 512, (8, 8))
+        #向上采样层
         self.decode4 = Decoder(512, 256 + 256, 256)
         self.decode3 = Decoder(256, 256 + 128, 256)
         self.decode2 = Decoder(256, 128 + 64, 128)
         self.decode1 = Decoder(128, 64 + 64, 64)
+        
         self.decode0 = nn.Sequential(
             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
             nn.Conv2d(64, 32, kernel_size=3, padding=1, bias=False),
@@ -115,11 +127,13 @@ class Unet_seq2seq(nn.Module):
 
     def forward(self, input, out_step, device=torch.device("cpu")):  # input batch_size,step,channels,height, width
         output = torch.zeros(input.shape[0], out_step, self.out_channels, input.shape[3], input.shape[4], device=device)
+        #初始化状态参数，作用于编码层LSTM的计算
         (eh1, ec1) = self.eclstm1.init_hidden(input.shape[0], 64, (128, 128), device=device)
         (eh2, ec2) = self.eclstm2.init_hidden(input.shape[0], 64, (64, 64), device=device)
         (eh3, ec3) = self.eclstm3.init_hidden(input.shape[0], 128, (32, 32), device=device)
         (eh4, ec4) = self.eclstm4.init_hidden(input.shape[0], 256, (16, 16), device=device)
         (eh5, ec5) = self.eclstm5.init_hidden(input.shape[0], 512, (8, 8), device=device)
+        #计算unet-seq2seq编码层
         for i in range(input.shape[1]):
             print(f'encoder{i}')
             e1 = self.layer1(input[:, i])  # 64,128,128
@@ -148,6 +162,7 @@ class Unet_seq2seq(nn.Module):
             print(f'ec2mean:{torch.mean(ec2).item()},ec2var:{torch.var(ec2).item()}')
             print(f'ec1mean:{torch.mean(ec1).item()},ec1var:{torch.var(ec1).item()}')
         dh1, dc1, dh2, dc2, dh3, dc3, dh4, dc4, dh5, dc5 = eh1, ec1, eh2, ec2, eh3, ec3, eh4, ec4, eh5, ec5
+        #计算解码层的unet-seq2seq
         print('con')
         print(f'dh5mean:{torch.mean(dh5).item()},dh5var:{torch.var(dh5).item()}')
         print(f'dh4mean:{torch.mean(dh4).item()},dh4var:{torch.var(dh4).item()}')
